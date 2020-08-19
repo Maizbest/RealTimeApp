@@ -1,0 +1,125 @@
+<html>
+
+<head>
+  <title>Chat WebSocket</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.js"
+    integrity="sha512-lyIq9fRcCeSCXhp41XC/250UBmypAHV8KW+AhLcSEIksWHBfhzub6XXwDe67wTpOG8zrO2NAU/TYmEaCW+aQSg=="
+    crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"
+    integrity="sha512-iKDtgDyTHjAitUDdLljGhenhPwrbBfqTKWO1mkhSFH3A7blITC9MhYon6SjnMhp4o0rADGw9yAC6EW4t5a4K3g=="
+    crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+  <script type="text/javascript">
+    var ws = null;
+    let CHAT_URL = '/greeting';
+    var userData = {
+      name: null, 
+      ip: null
+    }
+
+    function init() {
+      getIpAddress();
+      disconnect();
+    }
+
+    function connect() {
+      var socket = new SockJS('/greeting');
+      ws = Stomp.over(socket);
+      userData.name = document.getElementById('from').value;
+      ws.connect(userData, function (frame) {
+        
+        setConnected(true);
+        console.log('Connected: ' + frame);
+        ws.subscribe('/topic/messages', function (messageOutput) {
+          console.log(messageOutput)
+          showMessageOutput(JSON.parse(messageOutput.body));
+        });
+
+        ws.subscribe("/user/queue/errors", function (message) {
+          alert("Error " + message.body);
+        });
+
+        ws.subscribe("/user/queue/reply", function (message) {
+          showMessageOutput(JSON.parse(message.body));
+        });
+
+        ws.subscribe("/topic/logins", function (message) {
+          var usersInfo = document.getElementById('users');
+          console.log(message.body)
+          usersInfo.innerHTML = message.body
+        });
+
+      }, function (error) {
+        alert("STOMP error " + error);
+      });
+    }
+
+    function setConnected(connected) {
+      console.log('Connected set to ' + connected)
+      document.getElementById('connect').disabled = connected;
+      document.getElementById('disconnect').disabled = !connected;
+      document.getElementById('conversationDiv').style.visibility
+        = connected ? 'visible' : 'hidden';
+      document.getElementById('response').innerHTML = '';
+    }
+
+
+
+    function disconnect() {
+      if (ws != null) {
+        ws.disconnect();
+      }
+      setConnected(false);
+      console.warn("Disconnected");
+    }
+
+    function sendMessage() {
+      var from = document.getElementById('from').value;
+      var text = document.getElementById('text').value;
+      ws.send('/chat', {},
+        JSON.stringify({ 'from': from, 'text': text }));
+    }
+
+    function showMessageOutput(messageOutput) {
+      var response = document.getElementById('response');
+      var p = document.createElement('p');
+      p.style.wordWrap = 'break-word';
+      p.appendChild(document.createTextNode(messageOutput.from + ": "
+        + messageOutput.text + " (" + messageOutput.time + ")"));
+      console.log(response)
+      response.appendChild(p);
+    }
+    function getIpAddress() {
+      $.get('https://www.cloudflare.com/cdn-cgi/trace', function (data) {
+        userData.ip = data.ip
+      })
+    }
+  </script>
+</head>
+
+<body onload="init()">
+  <div>
+    <div>
+      <input type="text" id="from" placeholder="Choose a nickname" />
+    </div>
+    <br />
+    <div>
+      <button id="connect" onclick="connect();">Connect</button>
+      <button id="getIp" onclick="getIpAddress();">get ip</button>
+      <button id="disconnect" disabled="disabled" onclick="disconnect();">
+        Disconnect
+      </button>
+    </div>
+    <br />
+    <div id="conversationDiv">
+
+      <input type="text" id="text" placeholder="Write a message..." />
+      <button id="sendMessage" onclick="sendMessage();">Send</button>
+      <p id="response"></p>
+    </div>
+    <p><b id="users"></b> users connected</p>
+  </div>
+
+</body>
+
+</html>
